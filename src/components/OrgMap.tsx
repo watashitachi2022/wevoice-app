@@ -18,8 +18,8 @@ const MAIN_BOUNDS: [[number, number], [number, number]] = [
 ];
 
 // インセット（左上の小窓）: 沖縄・奄美エリア
-const INSET_CENTER: [number, number] = [127.8, 26.5];
-const INSET_ZOOM = 5.6;
+const INSET_CENTER: [number, number] = [127.9, 26.5];
+const INSET_ZOOM = 6.4;
 // この緯度より南の団体はインセット側に表示する
 const INSET_LAT_THRESHOLD = 29.5;
 
@@ -65,6 +65,9 @@ async function applyJapanStyle(map: MaplibreMap) {
     ];
     map.addSource("japan-mask", {
       type: "geojson",
+      // tolerance: 0 が重要。デフォルトではズームに応じてジオメトリが自動間引きされ、
+      // 低ズームで輪郭に自己交差が生じて塗りつぶしが壊れる（陸地への切り込み状の欠け）
+      tolerance: 0,
       data: {
         type: "Feature",
         properties: {},
@@ -213,7 +216,7 @@ export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
       <div ref={mainContainerRef} className="h-full w-full" />
       {/* 沖縄インセット（左上の小窓） */}
       <div className="absolute left-3 top-24 z-10 overflow-hidden rounded-lg border border-stone-300 bg-white shadow-md">
-        <div ref={insetContainerRef} className="h-[136px] w-[172px]" />
+        <div ref={insetContainerRef} className="h-[190px] w-[250px]" />
         <span className="absolute left-1.5 top-1 rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-bold text-stone-500">
           沖縄
         </span>
