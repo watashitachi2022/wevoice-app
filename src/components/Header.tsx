@@ -12,7 +12,8 @@ export default function Header({ orgCount, prefectureCount }: Props) {
   return (
     <header className="brand-gradient text-white shadow-md">
       <div className="flex w-full items-center gap-4 px-4 py-3 sm:px-6">
-        <Link href="/" className="flex min-w-0 items-center gap-3">
+        {/* ロゴSVGは下端付近に文字のベースラインがあるため、items-end でベースラインを揃える */}
+        <Link href="/" className="flex min-w-0 items-end gap-3">
           {/* 公式ロゴ（グラデーション上で読めるよう白抜きにする） */}
           <Image
             src="/logo.svg"
@@ -22,7 +23,7 @@ export default function Header({ orgCount, prefectureCount }: Props) {
             priority
             className="h-7 w-auto brightness-0 invert sm:h-8"
           />
-          <span className="hidden truncate text-sm text-white/90 lg:inline">
+          <span className="hidden truncate pb-[3px] text-sm leading-none text-white/90 lg:inline">
             声でつながる、地域共創プラットフォーム
           </span>
         </Link>
