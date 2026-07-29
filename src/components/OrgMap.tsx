@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Map as MaplibreMap, Marker, NavigationControl } from "maplibre-gl";
+import {
+  Map as MaplibreMap,
+  Marker,
+  NavigationControl,
+  type LngLatBoundsLike,
+} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { PublicOrg } from "@/types/org";
 
@@ -10,17 +15,23 @@ const SEA_COLOR = "#d8eaf6";
 // ベクター地図スタイル（OpenFreeMap: 無料・APIキー不要・商用可）
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
 
-// 本体地図: 本州〜九州・北海道（沖縄・奄美はインセットに分離）
-const MAIN_CENTER: [number, number] = [137.8, 38.0];
-const MAIN_BOUNDS: [[number, number], [number, number]] = [
-  [127, 29.5],
-  [150, 46.5],
+// 初期表示: 本州〜九州・北海道が画面サイズによらず収まるようにフィットさせる
+const INITIAL_FIT_BOUNDS: LngLatBoundsLike = [
+  [129, 30.8],
+  [146.2, 45.8],
+];
+
+// パン可能な範囲（沖縄も含む・ゆとりを持たせる。きつく絞ると横長画面で
+// 縦方向が入りきらなくなるため広めにしてある）
+const MAX_BOUNDS: LngLatBoundsLike = [
+  [110, 15],
+  [165, 55],
 ];
 
 // インセット（左上の小窓）: 沖縄・奄美エリア
 const INSET_CENTER: [number, number] = [127.9, 26.5];
 const INSET_ZOOM = 6.4;
-// この緯度より南の団体はインセット側に表示する
+// この緯度より南の団体はインセットにも表示する
 const INSET_LAT_THRESHOLD = 29.5;
 
 // このズームを超えたらインセットを隠す（拡大表示の邪魔にならないように）
@@ -83,7 +94,7 @@ function createEmojiMarker(
     .addTo(map);
 }
 
-const isInsetOrg = (org: PublicOrg) =>
+const isOkinawaOrg = (org: PublicOrg) =>
   org.lat != null && org.lat < INSET_LAT_THRESHOLD;
 
 type Props = {
@@ -93,12 +104,15 @@ type Props = {
 };
 
 // MapLibre GL によるベクター地図（本体 + 沖縄インセット）
+// インセットはショートカット: クリックすると本体地図が沖縄へ移動し、
+// 以降は本体地図で沖縄を自由にズーム・パンできる
 export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
   const mainContainerRef = useRef<HTMLDivElement>(null);
   const insetContainerRef = useRef<HTMLDivElement>(null);
   const mainMapRef = useRef<MaplibreMap | null>(null);
   const insetMapRef = useRef<MaplibreMap | null>(null);
-  const markersRef = useRef<globalThis.Map<string, Marker>>(new globalThis.Map());
+  const mainMarkersRef = useRef<globalThis.Map<string, Marker>>(new globalThis.Map());
+  const insetMarkersRef = useRef<globalThis.Map<string, Marker>>(new globalThis.Map());
   const [insetVisible, setInsetVisible] = useState(true);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
@@ -110,11 +124,11 @@ export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
     const mainMap = new MaplibreMap({
       container: mainContainerRef.current,
       style: MAP_STYLE,
-      center: MAIN_CENTER,
-      zoom: 5,
-      minZoom: 4.8,
+      bounds: INITIAL_FIT_BOUNDS,
+      fitBoundsOptions: { padding: 24 },
+      minZoom: 4,
       maxZoom: 17,
-      maxBounds: MAIN_BOUNDS,
+      maxBounds: MAX_BOUNDS,
       attributionControl: { compact: true },
     });
     mainMap.addControl(new NavigationControl({ showCompass: false }), "top-left");
@@ -140,8 +154,10 @@ export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
       (window as unknown as Record<string, unknown>).__wvMap = mainMap;
     }
     return () => {
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current.clear();
+      mainMarkersRef.current.forEach((m) => m.remove());
+      mainMarkersRef.current.clear();
+      insetMarkersRef.current.forEach((m) => m.remove());
+      insetMarkersRef.current.clear();
       mainMap.remove();
       insetMap.remove();
       mainMapRef.current = null;
@@ -149,41 +165,50 @@ export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
     };
   }, []);
 
-  // マーカーの同期（沖縄・奄美の団体はインセット側に置く）
+  // マーカーの同期（全団体を本体地図に置き、沖縄・奄美の団体はインセットにも置く）
   useEffect(() => {
     const mainMap = mainMapRef.current;
     const insetMap = insetMapRef.current;
     if (!mainMap || !insetMap) return;
-    const markers = markersRef.current;
     const wanted = new Set<string>();
 
     for (const org of orgs) {
       if (org.lat == null || org.lng == null) continue;
       wanted.add(org.id);
-      if (markers.has(org.id)) continue;
-      const targetMap = isInsetOrg(org) ? insetMap : mainMap;
-      markers.set(
-        org.id,
-        createEmojiMarker(org, targetMap, (id) => onSelectRef.current(id))
-      );
+      if (!mainMarkersRef.current.has(org.id)) {
+        mainMarkersRef.current.set(
+          org.id,
+          createEmojiMarker(org, mainMap, (id) => onSelectRef.current(id))
+        );
+      }
+      if (isOkinawaOrg(org) && !insetMarkersRef.current.has(org.id)) {
+        insetMarkersRef.current.set(
+          org.id,
+          createEmojiMarker(org, insetMap, (id) => onSelectRef.current(id))
+        );
+      }
     }
-    for (const [id, marker] of markers) {
-      if (!wanted.has(id)) {
-        marker.remove();
-        markers.delete(id);
+    for (const ref of [mainMarkersRef, insetMarkersRef]) {
+      for (const [id, marker] of ref.current) {
+        if (!wanted.has(id)) {
+          marker.remove();
+          ref.current.delete(id);
+        }
       }
     }
   }, [orgs]);
 
-  // 選択状態の反映（強調表示 + 本体地図のみ移動）
+  // 選択状態の反映（強調表示 + 本体地図の移動）
   useEffect(() => {
     const map = mainMapRef.current;
     if (!map) return;
-    for (const [id, marker] of markersRef.current) {
-      marker.getElement().classList.toggle("selected", id === selectedId);
+    for (const ref of [mainMarkersRef, insetMarkersRef]) {
+      for (const [id, marker] of ref.current) {
+        marker.getElement().classList.toggle("selected", id === selectedId);
+      }
     }
     const org = orgs.find((o) => o.id === selectedId);
-    if (org?.lat != null && org?.lng != null && !isInsetOrg(org)) {
+    if (org?.lat != null && org?.lng != null) {
       map.flyTo({
         center: [org.lng, org.lat],
         zoom: Math.max(map.getZoom(), 9),
@@ -192,19 +217,41 @@ export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
     }
   }, [selectedId, orgs]);
 
+  const flyToOkinawa = () => {
+    mainMapRef.current?.flyTo({
+      center: INSET_CENTER,
+      zoom: 8,
+      duration: 900,
+    });
+  };
+
   return (
     <div className="relative h-full w-full" style={{ background: SEA_COLOR }}>
       {/* MapLibreはコンテナのpositionをrelativeに上書きするため、absoluteではなくh-fullで広げる */}
       <div ref={mainContainerRef} className="h-full w-full" />
-      {/* 沖縄インセット（左上の小窓）。ズームイン時は邪魔にならないよう自動で隠す */}
+      {/* 沖縄インセット（左上の小窓）。クリックで本体地図が沖縄へ移動。
+          ズームイン時は邪魔にならないよう自動で隠す */}
       <div
-        className={`absolute left-3 top-24 z-10 overflow-hidden rounded-lg border border-stone-300 bg-white shadow-md transition-opacity duration-300 ${
+        role="button"
+        tabIndex={0}
+        title="クリックで沖縄を拡大"
+        onClick={flyToOkinawa}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") flyToOkinawa();
+        }}
+        className={`absolute left-3 top-24 z-10 cursor-pointer overflow-hidden rounded-lg border border-stone-300 bg-white shadow-md transition-all duration-300 hover:border-brand-400 hover:shadow-lg ${
           insetVisible ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <div ref={insetContainerRef} className="h-[190px] w-[250px]" />
+        <div
+          ref={insetContainerRef}
+          className="pointer-events-none h-[120px] w-[160px] sm:h-[190px] sm:w-[250px]"
+        />
         <span className="absolute left-1.5 top-1 rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-bold text-stone-500">
           沖縄
+        </span>
+        <span className="absolute bottom-1 right-1.5 rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-stone-400">
+          クリックで拡大 🔍
         </span>
       </div>
     </div>
