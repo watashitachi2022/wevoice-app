@@ -30,9 +30,18 @@ body {
   z-index: 0;
 }
 
-/* 公開マップ: 海の色（日本のGeoJSONだけを描画するスタイライズド地図の背景） */
-.leaflet-container.japan-map {
-  background: #d8eaf6;
+/* 公開マップ（MapLibre）: 絵文字ピン */
+.emoji-pin-gl {
+  border: none;
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.35));
+  transition: font-size 0.15s ease;
+}
+.emoji-pin-gl.selected {
+  font-size: 40px;
 }
 
 .emoji-pin {

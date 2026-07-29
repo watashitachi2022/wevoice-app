@@ -1,43 +1,77 @@
 "use client";
 
-import { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { useEffect, useRef } from "react";
+import { Map as MaplibreMap, Marker, NavigationControl } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import type { PublicOrg } from "@/types/org";
-import SmoothWheelZoom from "./SmoothWheelZoom";
 
-const JAPAN_CENTER: [number, number] = [36.5, 137.5];
-
-// 表示範囲を日本周辺に制限
+const JAPAN_CENTER: [number, number] = [137.5, 36.5]; // [lng, lat]
 const JAPAN_BOUNDS: [[number, number], [number, number]] = [
-  [22, 120],
-  [48, 152],
+  [120, 22],
+  [152, 48],
 ];
-
 const SEA_COLOR = "#d8eaf6";
 
-function emojiIcon(emoji: string, selected: boolean) {
-  return L.divIcon({
-    className: "emoji-pin",
-    html: `<span style="${selected ? "font-size:38px;" : ""}">${emoji}</span>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 24],
-  });
-}
+// ベクター地図スタイル（OpenFreeMap: 無料・APIキー不要・商用可）
+const MAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
 
-// 日本の輪郭で穴を開けたマスクをタイルの上に重ね、日本国外（海・周辺国）を隠す。
-// 国内は地理院タイルの道路・地名がそのまま見える。輪郭データ: 全球地図日本（国土地理院）
-function JapanMask() {
-  const map = useMap();
+type Props = {
+  orgs: PublicOrg[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+};
+
+// MapLibre GL によるベクター地図。
+// - GPU描画のためズーム・ドラッグ・慣性がネイティブでなめらか
+// - 日本の輪郭で穴を開けたマスクレイヤーを最上段に重ね、日本国外を海色で覆う
+//   （GLレイヤーなのでドラッグ中も途切れない）
+export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<MaplibreMap | null>(null);
+  const markersRef = useRef<globalThis.Map<string, Marker>>(new globalThis.Map());
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+
+  // 地図の初期化（マウント時に1回）
   useEffect(() => {
-    let layer: L.Polygon | null = null;
-    let cancelled = false;
-    fetch("/japan-outline.geojson")
-      .then((res) => res.json())
-      .then((geo) => {
-        if (cancelled) return;
-        // FeatureCollection / GeometryCollection どちらの形式でもジオメトリを取り出す
+    if (!containerRef.current) return;
+    const map = new MaplibreMap({
+      container: containerRef.current,
+      style: MAP_STYLE,
+      center: JAPAN_CENTER,
+      zoom: 4.8,
+      minZoom: 4.3,
+      maxZoom: 17,
+      maxBounds: JAPAN_BOUNDS,
+      attributionControl: { compact: true },
+    });
+    map.addControl(
+      new NavigationControl({ showCompass: false }),
+      "top-left"
+    );
+    map.touchPitch.disable();
+    map.dragRotate.disable();
+
+    map.on("load", async () => {
+      // 地名ラベルを日本語優先にする
+      for (const layer of map.getStyle().layers) {
+        if (layer.type !== "symbol") continue;
+        if (!map.getLayoutProperty(layer.id, "text-field")) continue;
+        map.setLayoutProperty(layer.id, "text-field", [
+          "coalesce",
+          ["get", "name:ja"],
+          ["get", "name"],
+        ]);
+      }
+      // 海の色をブランドトーンに合わせる
+      if (map.getLayer("water")) {
+        map.setPaintProperty("water", "fill-color", SEA_COLOR);
+      }
+
+      // 日本の輪郭マスク（輪郭データ: 全球地図日本（国土地理院）を簡略化）
+      try {
+        const res = await fetch("/japan-outline.geojson");
+        const geo = await res.json();
         const geometries: Array<{ type: string; coordinates: unknown }> =
           geo.type === "GeometryCollection"
             ? geo.geometries
@@ -49,82 +83,103 @@ function JapanMask() {
           const polys = (
             geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates
           ) as [number, number][][][];
-          for (const poly of polys) {
-            holes.push(
-              poly[0].map(([lng, lat]) => [lat, lng] as [number, number])
-            );
-          }
+          for (const poly of polys) holes.push(poly[0]);
         }
         const world: [number, number][] = [
-          [-85, -180],
-          [85, -180],
-          [85, 180],
-          [-85, 180],
+          [-180, -85],
+          [180, -85],
+          [180, 85],
+          [-180, 85],
+          [-180, -85],
         ];
-        layer = L.polygon([world, ...holes], {
-          stroke: false,
-          fillColor: SEA_COLOR,
-          fillOpacity: 1,
-          interactive: false,
-        }).addTo(map);
-      })
-      .catch((e) => console.error("日本輪郭データの読み込みに失敗:", e));
-    return () => {
-      cancelled = true;
-      layer?.remove();
-    };
-  }, [map]);
-  return null;
-}
+        map.addSource("japan-mask", {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "Polygon", coordinates: [world, ...holes] },
+          },
+        });
+        // 最上段に追加 → 日本国外の陸地・ラベルをすべて覆う
+        map.addLayer({
+          id: "japan-mask",
+          type: "fill",
+          source: "japan-mask",
+          paint: { "fill-color": SEA_COLOR, "fill-opacity": 1 },
+        });
+      } catch (e) {
+        console.error("日本輪郭データの読み込みに失敗:", e);
+      }
+    });
 
-// 選択された団体へ地図を移動させる
-function FlyToSelected({ org }: { org: PublicOrg | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (org?.lat && org?.lng) {
-      map.flyTo([org.lat, org.lng], Math.max(map.getZoom(), 9), { duration: 0.6 });
+    mapRef.current = map;
+    if (process.env.NODE_ENV === "development") {
+      (window as unknown as Record<string, unknown>).__wvMap = map;
     }
-  }, [org, map]);
-  return null;
-}
+    return () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current.clear();
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
 
-type Props = {
-  orgs: PublicOrg[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-};
+  // マーカーの同期
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const markers = markersRef.current;
+    const wanted = new Set<string>();
 
-export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
-  const selectedOrg = orgs.find((o) => o.id === selectedId) ?? null;
+    for (const org of orgs) {
+      if (org.lat == null || org.lng == null) continue;
+      wanted.add(org.id);
+      if (markers.has(org.id)) continue;
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "emoji-pin-gl";
+      el.textContent = org.emoji;
+      el.setAttribute("aria-label", org.name);
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onSelectRef.current(org.id);
+      });
+      const marker = new Marker({ element: el, anchor: "bottom" })
+        .setLngLat([org.lng, org.lat])
+        .addTo(map);
+      markers.set(org.id, marker);
+    }
+    // 絞り込みで消えた団体のマーカーを除去
+    for (const [id, marker] of markers) {
+      if (!wanted.has(id)) {
+        marker.remove();
+        markers.delete(id);
+      }
+    }
+  }, [orgs]);
+
+  // 選択状態の反映（強調表示 + 移動）
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    for (const [id, marker] of markersRef.current) {
+      marker.getElement().classList.toggle("selected", id === selectedId);
+    }
+    const org = orgs.find((o) => o.id === selectedId);
+    if (org?.lat != null && org?.lng != null) {
+      map.flyTo({
+        center: [org.lng, org.lat],
+        zoom: Math.max(map.getZoom(), 9),
+        duration: 700,
+      });
+    }
+  }, [selectedId, orgs]);
 
   return (
-    <MapContainer
-      center={JAPAN_CENTER}
-      zoom={5}
-      minZoom={5}
-      maxZoom={17}
-      zoomSnap={0}
-      maxBounds={JAPAN_BOUNDS}
-      maxBoundsViscosity={1.0}
-      className="japan-map h-full w-full"
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>'
-        url="https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"
-      />
-      <JapanMask />
-      {orgs
-        .filter((o) => o.lat != null && o.lng != null)
-        .map((org) => (
-          <Marker
-            key={org.id}
-            position={[org.lat!, org.lng!]}
-            icon={emojiIcon(org.emoji, org.id === selectedId)}
-            eventHandlers={{ click: () => onSelect(org.id) }}
-          />
-        ))}
-      <FlyToSelected org={selectedOrg} />
-      <SmoothWheelZoom />
-    </MapContainer>
+    <div
+      ref={containerRef}
+      className="h-full w-full"
+      style={{ background: SEA_COLOR }}
+    />
   );
 }
