@@ -45,11 +45,16 @@ export default function MapPicker({ lat, lng, onPick }: Props) {
     <MapContainer
       center={lat != null && lng != null ? [lat, lng] : JAPAN_CENTER}
       zoom={lat != null && lng != null ? 13 : 5}
+      minZoom={5}
+      maxZoom={18}
+      zoomSnap={0.25}
+      zoomDelta={0.5}
+      wheelPxPerZoomLevel={120}
       className="h-72 w-full rounded-lg"
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>'
+        url="https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"
       />
       {lat != null && lng != null && <Marker position={[lat, lng]} icon={pinIcon} />}
       <ClickHandler onPick={onPick} />
