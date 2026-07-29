@@ -261,15 +261,29 @@ export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
     <div className="relative h-full w-full" style={{ background: SEA_COLOR }}>
       {/* MapLibreはコンテナのpositionをrelativeに上書きするため、absoluteではなくh-fullで広げる */}
       <div ref={mainContainerRef} className="h-full w-full" />
-      {/* ズームイン中のみ表示: +/- ボタンの下の「全体表示に戻る」 */}
+      {/* ズームイン中のみ表示: +/- ボタンと同じ幅のリターンボタン（全体表示に戻る） */}
       <button
         type="button"
         onClick={resetView}
-        className={`absolute left-[10px] top-[86px] z-10 flex items-center gap-1 rounded-full border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-stone-600 shadow-md transition-opacity duration-300 hover:bg-stone-50 ${
+        title="全体表示に戻る"
+        aria-label="全体表示に戻る"
+        className={`absolute left-[10px] top-[77px] z-10 flex h-[29px] w-[29px] items-center justify-center rounded bg-white text-stone-700 shadow-[0_0_0_2px_rgba(0,0,0,0.1)] transition-opacity duration-300 hover:bg-stone-50 ${
           insetVisible ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >
-        🗾 全体表示に戻る
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M9 14 4 9l5-5" />
+          <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+        </svg>
       </button>
       {/* 沖縄インセット（左上の小窓）。クリックで本体地図が沖縄へ移動。
           ズームイン時は邪魔にならないよう自動で隠す */}
