@@ -18,7 +18,6 @@ export default function Footer() {
             運営者情報
           </Link>
         </div>
-        <p className="text-xs text-stone-400">© We Voice</p>
       </div>
     </footer>
   );

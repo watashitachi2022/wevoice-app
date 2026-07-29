@@ -34,7 +34,7 @@ const INSET_ZOOM = 6.4;
 // この緯度より南の団体はインセットにも表示する
 const INSET_LAT_THRESHOLD = 29.5;
 
-// このズームを超えたらインセットを隠す（拡大表示の邪魔にならないように）
+// このズームを超えたらインセットを隠し、代わりに「全体表示に戻る」ボタンを出す
 const INSET_HIDE_ZOOM = 6.5;
 
 // 日本語ラベル・海色・日本輪郭マスクを適用する共通処理
@@ -249,10 +249,28 @@ export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
     });
   };
 
+  // 初期レンダリング時と同じ「日本全体フィット」に戻す
+  const resetView = () => {
+    mainMapRef.current?.fitBounds(INITIAL_FIT_BOUNDS, {
+      padding: 24,
+      duration: 800,
+    });
+  };
+
   return (
     <div className="relative h-full w-full" style={{ background: SEA_COLOR }}>
       {/* MapLibreはコンテナのpositionをrelativeに上書きするため、absoluteではなくh-fullで広げる */}
       <div ref={mainContainerRef} className="h-full w-full" />
+      {/* ズームイン中のみ表示: +/- ボタンの下の「全体表示に戻る」 */}
+      <button
+        type="button"
+        onClick={resetView}
+        className={`absolute left-[10px] top-[86px] z-10 flex items-center gap-1 rounded-full border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-stone-600 shadow-md transition-opacity duration-300 hover:bg-stone-50 ${
+          insetVisible ? "pointer-events-none opacity-0" : "opacity-100"
+        }`}
+      >
+        🗾 全体表示に戻る
+      </button>
       {/* 沖縄インセット（左上の小窓）。クリックで本体地図が沖縄へ移動。
           ズームイン時は邪魔にならないよう自動で隠す */}
       <div
