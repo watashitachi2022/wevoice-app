@@ -104,7 +104,7 @@ export default function DetailPanel({ org, onClose }: Props) {
 
         <Link
           href={`/org/${org.id}`}
-          className="block rounded-lg border border-brand-300 py-2 text-center text-sm font-bold text-brand-600 transition hover:bg-brand-50"
+          className="block rounded-full border border-brand-300 py-2 text-center text-sm font-bold text-brand-600 transition hover:bg-brand-50"
         >
           この団体のページを開く（共有用）
         </Link>

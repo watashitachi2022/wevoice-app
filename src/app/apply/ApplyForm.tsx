@@ -203,7 +203,7 @@ export default function ApplyForm({ tags }: { tags: Tag[] }) {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full rounded-xl bg-brand-500 py-3 text-base font-bold text-white shadow-md transition hover:bg-brand-600 disabled:opacity-50"
+        className="brand-gradient w-full rounded-full py-3 text-base font-bold text-white shadow-md transition hover:opacity-90 disabled:opacity-50"
       >
         {isSubmitting ? "送信中…" : "この内容で申請する"}
       </button>

@@ -1,21 +1,32 @@
 import Link from "next/link";
+import Image from "next/image";
 
 type Props = {
   orgCount?: number;
   prefectureCount?: number;
 };
 
+// ヘッダーは画面横幅いっぱいを使い、ロゴを左端・統計/申請ボタンを右端に寄せる。
+// 配色は we-voice.net と同じ 黄→コーラル のグラデーション。
 export default function Header({ orgCount, prefectureCount }: Props) {
   return (
-    <header className="bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-md">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-        <Link href="/" className="flex items-baseline gap-2">
-          <span className="text-2xl font-bold tracking-tight">🎙️ We Voice</span>
-          <span className="hidden text-sm text-brand-100 sm:inline">
+    <header className="brand-gradient text-white shadow-md">
+      <div className="flex w-full items-center gap-4 px-4 py-3 sm:px-6">
+        <Link href="/" className="flex min-w-0 items-center gap-3">
+          {/* 公式ロゴ（グラデーション上で読めるよう白抜きにする） */}
+          <Image
+            src="/logo.svg"
+            alt="We voice"
+            width={158}
+            height={30}
+            priority
+            className="h-7 w-auto brightness-0 invert sm:h-8"
+          />
+          <span className="hidden truncate text-sm text-white/90 lg:inline">
             声でつながる、地域共創プラットフォーム
           </span>
         </Link>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {orgCount !== undefined && (
             <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-medium">
               全{orgCount}団体
@@ -28,7 +39,7 @@ export default function Header({ orgCount, prefectureCount }: Props) {
           )}
           <Link
             href="/apply"
-            className="rounded-full bg-white px-4 py-1.5 text-sm font-bold text-brand-600 shadow-sm transition hover:bg-brand-50"
+            className="rounded-full bg-white px-4 py-1.5 text-sm font-bold text-brand-500 shadow-sm transition hover:bg-brand-50"
           >
             掲載申請（無料）
           </Link>
