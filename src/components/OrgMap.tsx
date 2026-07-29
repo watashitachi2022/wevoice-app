@@ -75,6 +75,26 @@ async function applyJapanStyle(map: MaplibreMap) {
   }
 }
 
+// ピンの配色パレット（団体IDから安定的に選ぶ）
+const PIN_COLORS = [
+  "#5b8def", // 青
+  "#e77b6a", // コーラル
+  "#3aa6a0", // ティール
+  "#8a63c9", // 紫
+  "#e8a33d", // オレンジ
+  "#e36a9b", // ピンク
+  "#66a96b", // 緑
+  "#b8502f", // レンガ
+  "#4f74c9", // 藍
+  "#c2703e", // ブラウン
+];
+
+function pinColor(id: string) {
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return PIN_COLORS[hash % PIN_COLORS.length];
+}
+
 function createEmojiMarker(
   org: PublicOrg,
   map: MaplibreMap,
@@ -82,9 +102,13 @@ function createEmojiMarker(
 ) {
   const el = document.createElement("button");
   el.type = "button";
-  el.className = "emoji-pin-gl";
-  el.textContent = org.emoji;
+  el.className = "org-pin";
+  el.style.setProperty("--pin-color", pinColor(org.id));
   el.setAttribute("aria-label", org.name);
+  const bubble = document.createElement("span");
+  bubble.className = "org-pin-bubble";
+  bubble.textContent = org.emoji;
+  el.appendChild(bubble);
   el.addEventListener("click", (e) => {
     e.stopPropagation();
     onClick(org.id);

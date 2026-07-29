@@ -30,18 +30,59 @@ body {
   z-index: 0;
 }
 
-/* 公開マップ（MapLibre）: 絵文字ピン */
-.emoji-pin-gl {
+/* 公開マップ（MapLibre）: 団体ピン（色付き円 + 白フチ + 下向きの尻尾 + 絵文字） */
+.org-pin {
+  position: relative;
+  width: 46px;
+  height: 56px;
   border: none;
   background: transparent;
-  font-size: 28px;
-  line-height: 1;
+  padding: 0;
   cursor: pointer;
-  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.35));
-  transition: font-size 0.15s ease;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
 }
-.emoji-pin-gl.selected {
-  font-size: 40px;
+.org-pin-bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 3px solid #fff;
+  background: var(--pin-color, #f97316);
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+  transform-origin: 50% 100%;
+}
+/* 尻尾（白フチ → 色付き本体の順に重ねる） */
+.org-pin::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 8px solid transparent;
+  border-top: 12px solid #fff;
+}
+.org-pin::before {
+  content: "";
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top: 8px solid var(--pin-color, #f97316);
+  z-index: 1;
+}
+.org-pin.selected {
+  z-index: 10;
+}
+.org-pin.selected .org-pin-bubble {
+  transform: scale(1.2);
 }
 
 .emoji-pin {
