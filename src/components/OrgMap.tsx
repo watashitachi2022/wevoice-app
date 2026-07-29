@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
+import { useEffect, useState } from "react";
+import { MapContainer, Marker, GeoJSON, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import type { GeoJsonObject } from "geojson";
 import type { PublicOrg } from "@/types/org";
+import SmoothWheelZoom from "./SmoothWheelZoom";
 
 const JAPAN_CENTER: [number, number] = [36.5, 137.5];
 
-// 表示範囲を日本周辺に制限（パンで世界地図側へ出られないようにする）
+// 表示範囲を日本周辺に制限
 const JAPAN_BOUNDS: [[number, number], [number, number]] = [
-  [20, 118],
-  [50, 154],
+  [22, 120],
+  [48, 152],
 ];
 
 function emojiIcon(emoji: string, selected: boolean) {
@@ -28,7 +30,7 @@ function FlyToSelected({ org }: { org: PublicOrg | null }) {
   const map = useMap();
   useEffect(() => {
     if (org?.lat && org?.lng) {
-      map.flyTo([org.lat, org.lng], Math.max(map.getZoom(), 9), { duration: 0.6 });
+      map.flyTo([org.lat, org.lng], Math.max(map.getZoom(), 8), { duration: 0.6 });
     }
   }, [org, map]);
   return null;
@@ -40,27 +42,42 @@ type Props = {
   onSelect: (id: string) => void;
 };
 
+// タイル地図だと周辺国が必ず写り込むため、日本の都道府県ポリゴン（GeoJSON）だけを
+// 描画するスタイライズド地図にしている。データ出典: 全球地図日本（国土地理院）
 export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
   const selectedOrg = orgs.find((o) => o.id === selectedId) ?? null;
+  const [japan, setJapan] = useState<GeoJsonObject | null>(null);
+
+  useEffect(() => {
+    fetch("/japan.geojson")
+      .then((res) => res.json())
+      .then(setJapan)
+      .catch((e) => console.error("日本地図データの読み込みに失敗:", e));
+  }, []);
+
   return (
     <MapContainer
       center={JAPAN_CENTER}
       zoom={5}
-      minZoom={5}
-      maxZoom={18}
+      minZoom={4.5}
+      maxZoom={10}
+      zoomSnap={0}
       maxBounds={JAPAN_BOUNDS}
       maxBoundsViscosity={1.0}
-      // ホイール1回で2段階ズームしないよう、細かい刻みでシームレスに動かす
-      zoomSnap={0.25}
-      zoomDelta={0.5}
-      wheelPxPerZoomLevel={120}
-      className="h-full w-full"
-      scrollWheelZoom
+      className="japan-map h-full w-full"
+      attributionControl={false}
     >
-      <TileLayer
-        attribution='&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>'
-        url="https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"
-      />
+      {japan && (
+        <GeoJSON
+          data={japan}
+          style={{
+            fillColor: "#ffffff",
+            fillOpacity: 1,
+            color: "#cbd5e1",
+            weight: 0.8,
+          }}
+        />
+      )}
       {orgs
         .filter((o) => o.lat != null && o.lng != null)
         .map((org) => (
@@ -72,6 +89,12 @@ export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
           />
         ))}
       <FlyToSelected org={selectedOrg} />
+      <SmoothWheelZoom />
+      <div className="leaflet-bottom leaflet-right">
+        <div className="leaflet-control m-1 rounded bg-white/70 px-1.5 py-0.5 text-[10px] text-stone-400">
+          地図データ: 全球地図日本（国土地理院）
+        </div>
+      </div>
     </MapContainer>
   );
 }

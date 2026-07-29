@@ -30,6 +30,11 @@ body {
   z-index: 0;
 }
 
+/* 公開マップ: 海の色（日本のGeoJSONだけを描画するスタイライズド地図の背景） */
+.leaflet-container.japan-map {
+  background: #d8eaf6;
+}
+
 .emoji-pin {
   background: transparent;
   border: none;

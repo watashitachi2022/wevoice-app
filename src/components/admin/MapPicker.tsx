@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-lea
 import { useEffect } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import SmoothWheelZoom from "@/components/SmoothWheelZoom";
 
 const JAPAN_CENTER: [number, number] = [36.5, 137.5];
 
@@ -47,9 +48,7 @@ export default function MapPicker({ lat, lng, onPick }: Props) {
       zoom={lat != null && lng != null ? 13 : 5}
       minZoom={5}
       maxZoom={18}
-      zoomSnap={0.25}
-      zoomDelta={0.5}
-      wheelPxPerZoomLevel={120}
+      zoomSnap={0}
       className="h-72 w-full rounded-lg"
     >
       <TileLayer
@@ -59,6 +58,7 @@ export default function MapPicker({ lat, lng, onPick }: Props) {
       {lat != null && lng != null && <Marker position={[lat, lng]} icon={pinIcon} />}
       <ClickHandler onPick={onPick} />
       <PanTo lat={lat} lng={lng} />
+      <SmoothWheelZoom />
     </MapContainer>
   );
 }
