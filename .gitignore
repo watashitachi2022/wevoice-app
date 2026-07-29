@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# internal docs (do not push to shared repo)
+07-29*
+meeting.md
+開発計画.md
+S__234250281.jpg
+画面収録*.mp4
+.playwright-mcp/
+supabase/.temp/
