@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Map as MaplibreMap, Marker, NavigationControl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { PublicOrg } from "@/types/org";
@@ -23,9 +23,13 @@ const INSET_ZOOM = 6.4;
 // この緯度より南の団体はインセット側に表示する
 const INSET_LAT_THRESHOLD = 29.5;
 
+// このズームを超えたらインセットを隠す（拡大表示の邪魔にならないように）
+const INSET_HIDE_ZOOM = 6.5;
+
 // 日本語ラベル・海色・日本輪郭マスクを適用する共通処理
-// マスクの外周は日本周辺の矩形に留める（世界全体を外周にすると
-// 三角形分割の精度エラーで陸地に切り込み状の描画欠けが出るため）
+// マスクは scripts/build-mask.mjs で事前計算したグリッド分割ポリゴン群
+// （巨大な「外周+穴数百個」ポリゴンは三角形分割が壊れ、陸地に切り込み状の
+//   描画欠けが出るため、小さな単純ポリゴンの集合にしてある）
 async function applyJapanStyle(map: MaplibreMap) {
   for (const layer of map.getStyle().layers) {
     if (layer.type !== "symbol") continue;
@@ -41,47 +45,22 @@ async function applyJapanStyle(map: MaplibreMap) {
   }
 
   try {
-    const res = await fetch("/japan-outline.geojson");
-    const geo = await res.json();
-    const geometries: Array<{ type: string; coordinates: unknown }> =
-      geo.type === "GeometryCollection"
-        ? geo.geometries
-        : geo.type === "FeatureCollection"
-          ? geo.features.map((f: { geometry: never }) => f.geometry)
-          : [geo];
-    const holes: [number, number][][] = [];
-    for (const geom of geometries) {
-      const polys = (
-        geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates
-      ) as [number, number][][][];
-      for (const poly of polys) holes.push(poly[0]);
-    }
-    const outer: [number, number][] = [
-      [110, 5],
-      [170, 5],
-      [170, 60],
-      [110, 60],
-      [110, 5],
-    ];
+    const res = await fetch("/japan-mask.geojson");
+    const mask = await res.json();
     map.addSource("japan-mask", {
       type: "geojson",
-      // tolerance: 0 が重要。デフォルトではズームに応じてジオメトリが自動間引きされ、
-      // 低ズームで輪郭に自己交差が生じて塗りつぶしが壊れる（陸地への切り込み状の欠け）
+      // tolerance: 0 でズーム連動の自動間引きを無効化（間引きによる自己交差防止）
       tolerance: 0,
-      data: {
-        type: "Feature",
-        properties: {},
-        geometry: { type: "Polygon", coordinates: [outer, ...holes] },
-      },
+      data: mask,
     });
     map.addLayer({
       id: "japan-mask",
       type: "fill",
       source: "japan-mask",
-      paint: { "fill-color": SEA_COLOR, "fill-opacity": 1 },
+      paint: { "fill-color": SEA_COLOR, "fill-opacity": 1, "fill-antialias": false },
     });
   } catch (e) {
-    console.error("日本輪郭データの読み込みに失敗:", e);
+    console.error("日本マスクデータの読み込みに失敗:", e);
   }
 }
 
@@ -120,6 +99,7 @@ export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
   const mainMapRef = useRef<MaplibreMap | null>(null);
   const insetMapRef = useRef<MaplibreMap | null>(null);
   const markersRef = useRef<globalThis.Map<string, Marker>>(new globalThis.Map());
+  const [insetVisible, setInsetVisible] = useState(true);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
@@ -141,6 +121,8 @@ export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
     mainMap.touchPitch.disable();
     mainMap.dragRotate.disable();
     mainMap.on("load", () => applyJapanStyle(mainMap));
+    // 全国を見渡すズームのときだけインセットを表示する
+    mainMap.on("zoom", () => setInsetVisible(mainMap.getZoom() < INSET_HIDE_ZOOM));
 
     const insetMap = new MaplibreMap({
       container: insetContainerRef.current,
@@ -214,8 +196,12 @@ export default function OrgMap({ orgs, selectedId, onSelect }: Props) {
     <div className="relative h-full w-full" style={{ background: SEA_COLOR }}>
       {/* MapLibreはコンテナのpositionをrelativeに上書きするため、absoluteではなくh-fullで広げる */}
       <div ref={mainContainerRef} className="h-full w-full" />
-      {/* 沖縄インセット（左上の小窓） */}
-      <div className="absolute left-3 top-24 z-10 overflow-hidden rounded-lg border border-stone-300 bg-white shadow-md">
+      {/* 沖縄インセット（左上の小窓）。ズームイン時は邪魔にならないよう自動で隠す */}
+      <div
+        className={`absolute left-3 top-24 z-10 overflow-hidden rounded-lg border border-stone-300 bg-white shadow-md transition-opacity duration-300 ${
+          insetVisible ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      >
         <div ref={insetContainerRef} className="h-[190px] w-[250px]" />
         <span className="absolute left-1.5 top-1 rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-bold text-stone-500">
           沖縄
